@@ -1,7 +1,10 @@
 #!/bin/bash
 
+# Criar diretórios para logs
+mkdir -p /var/log/postgresql /var/log/redis /var/log/evolution
+
 # Iniciar PostgreSQL
-su - postgres -c "pg_ctl -D /var/lib/postgresql/14/data -l /var/log/postgresql/postgresql.log start"
+su - postgres -c "pg_ctl -D /var/lib/postgresql/data -l /var/log/postgresql/postgresql.log start"
 
 # Aguardar o PostgreSQL iniciar
 sleep 5

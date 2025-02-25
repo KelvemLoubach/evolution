@@ -1,11 +1,11 @@
-# Usar imagem Alpine para o servidor principal - é leve e tem os pacotes que precisamos
+# Usar imagem Alpine para o servidor principal
 FROM alpine:latest
 
 # Instalar pacotes necessários
 RUN apk add --no-cache \
     redis \
-    postgresql14 \
-    postgresql14-contrib \
+    postgresql \
+    postgresql-contrib \
     supervisor \
     nodejs \
     npm \
@@ -16,16 +16,16 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Baixar e configurar a Evolution API
-RUN mkdir -p /app/evolution /data /var/lib/postgresql/14/data
+RUN mkdir -p /app/evolution /data /var/lib/postgresql/data
 
 # Inicializar banco de dados PostgreSQL
 RUN mkdir -p /run/postgresql && chown -R postgres:postgres /run/postgresql && \
-    mkdir -p /var/lib/postgresql/14/data && chown -R postgres:postgres /var/lib/postgresql/14/data
+    mkdir -p /var/lib/postgresql/data && chown -R postgres:postgres /var/lib/postgresql/data
 
 USER postgres
-RUN initdb -D /var/lib/postgresql/14/data
-RUN echo "host all all 0.0.0.0/0 md5" >> /var/lib/postgresql/14/data/pg_hba.conf && \
-    echo "listen_addresses='*'" >> /var/lib/postgresql/14/data/postgresql.conf
+RUN initdb -D /var/lib/postgresql/data
+RUN echo "host all all 0.0.0.0/0 md5" >> /var/lib/postgresql/data/pg_hba.conf && \
+    echo "listen_addresses='*'" >> /var/lib/postgresql/data/postgresql.conf
 USER root
 
 # Extrair e configurar a Evolution API
@@ -84,6 +84,9 @@ ENV WEBHOOK_GLOBAL_ENABLED=false
 # Configurar script de inicialização
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
+
+# Criar diretórios para logs
+RUN mkdir -p /var/log/supervisor /var/log/postgresql /var/log/redis
 
 # Expor portas
 EXPOSE 8080 5432 6379 5433
