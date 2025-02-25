@@ -1,33 +1,45 @@
-# Multi-stage build for a comprehensive service including Redis, PostgreSQL, pgAdmin, and Evolution API
+# Usar imagem Alpine para o servidor principal - é leve e tem os pacotes que precisamos
+FROM alpine:latest
 
-# Start with Redis stage
-FROM redis:latest as redis
-# Redis configuration
-EXPOSE 6379
-CMD ["redis-server", "--appendonly", "yes", "--port", "6379"]
+# Instalar pacotes necessários
+RUN apk add --no-cache \
+    redis \
+    postgresql14 \
+    postgresql14-contrib \
+    supervisor \
+    nodejs \
+    npm \
+    curl \
+    bash
 
-# PostgreSQL stage
-FROM postgres:14.13 as postgres
-ENV POSTGRES_USER=postgres
-ENV POSTGRES_PASSWORD=Anapolis21
-EXPOSE 5432
+# Diretórios de trabalho
+WORKDIR /app
 
-# pgAdmin stage
-FROM dpage/pgadmin4:latest as pgadmin
-ENV PGADMIN_DEFAULT_EMAIL=kelvem21@gmail.com
-ENV PGADMIN_DEFAULT_PASSWORD=Anapolis21
-EXPOSE 80
+# Baixar e configurar a Evolution API
+RUN mkdir -p /app/evolution /data /var/lib/postgresql/14/data
 
-# Main Evolution API stage
-FROM atendai/evolution-api:v2.1.1-homolog
+# Inicializar banco de dados PostgreSQL
+RUN mkdir -p /run/postgresql && chown -R postgres:postgres /run/postgresql && \
+    mkdir -p /var/lib/postgresql/14/data && chown -R postgres:postgres /var/lib/postgresql/14/data
 
-# Copy necessary files
-WORKDIR /evolution
+USER postgres
+RUN initdb -D /var/lib/postgresql/14/data
+RUN echo "host all all 0.0.0.0/0 md5" >> /var/lib/postgresql/14/data/pg_hba.conf && \
+    echo "listen_addresses='*'" >> /var/lib/postgresql/14/data/postgresql.conf
+USER root
 
-# Volume directories
-RUN mkdir -p /evolution/instances /data /var/lib/postgresql/data
+# Extrair e configurar a Evolution API
+RUN curl -L https://github.com/EvolutionAPI/evolution-api/archive/refs/tags/v2.1.1.tar.gz -o evolution.tar.gz && \
+    tar -xzf evolution.tar.gz -C /app && \
+    mv /app/evolution-api-* /app/evolution-api && \
+    cd /app/evolution-api && \
+    npm install && \
+    npm run build
 
-# Set environment variables
+# Copiar configuração do supervisor
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Variáveis de ambiente para a Evolution API
 ENV SERVER_URL=http://localhost:8080
 ENV AUTHENTICATION_TYPE=apikey
 ENV AUTHENTICATION_API_KEY=KFZOm3Hc3GSNWwHBywEm67xYgjN8xGTH
@@ -69,20 +81,12 @@ ENV CHATWOOT_MESSAGE_DELETE=true
 ENV RABBITMQ_ENABLED=false
 ENV WEBHOOK_GLOBAL_ENABLED=false
 
-# Install necessary packages
-RUN apt-get update && apt-get install -y \
-    postgresql \
-    postgresql-contrib \
-    redis-server \
-    supervisor \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Configurar script de inicialização
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
-# Copy supervisor configuration
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Expose ports
+# Expor portas
 EXPOSE 8080 5432 6379 5433
 
-# Command to run supervisord
+# Comando para iniciar todos os serviços
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
